@@ -1,4 +1,4 @@
-from flask import Flask, request
+from flask import Flask, request, Request, Response
 from llama_index import SimpleDirectoryReader, GPTVectorStoreIndex, LLMPredictor, PromptHelper, StorageContext, load_index_from_storage, Document
 from langchain import OpenAI 
 
@@ -8,27 +8,19 @@ import os
 
 class AuthMiddleware:
     def __init__(self, app):
+        self.secret = os.environ.get("AUTHORIZATION_HEADER")
         self.app = app
 
     def __call__(self, environ, start_response):
-        # Ambil nilai header "Authorization" dari OS variable
-        auth_header = os.environ.get('AUTHORIZATION_HEADER', '')
+        request = Request(environ)
 
-        # Cek apakah header kosong
-        if not auth_header:
-            return self._unauthorized_response(start_response)
+        if request.method == "OPTIONS":
+            return Response(status=200)(environ, start_response)
 
-        # Validasi header sesuai kebutuhan
-        # Contoh: Cek apakah header sama dengan nilai tertentu
-        if auth_header != 'my-secret-header':
-            return self._unauthorized_response(start_response)
+        if request.headers.get('x-secret-signature') != self.secret:
+            return Response('Authorization failed', status=401, mimetype='text/plain')(environ, start_response)
 
-        # Header valid, lanjutkan ke aplikasi Flask
         return self.app(environ, start_response)
-
-    def _unauthorized_response(self, start_response):
-        start_response('401 Unauthorized', [('Content-Type', 'text/plain')])
-        return [b'Unauthorized']
 
 def construct_index(directory_path):
     max_input_size = 4096
